@@ -7,11 +7,14 @@ import (
 )
 
 func main() {
-	serveMuxHandler := http.NewServeMux()
-	serveMuxHandler.Handle("/", http.FileServer(http.Dir('.')))
-	server := http.Server{
-		Addr:    ":8080",
-		Handler: serveMuxHandler,
-	}
-	log.Fatal(server.ListenAndServe())
+	mux := http.NewServeMux()
+	mux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir('.'))))
+	mux.HandleFunc("/healthz", healthHandler)
+	log.Fatal(http.ListenAndServe(":8080", mux))
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
