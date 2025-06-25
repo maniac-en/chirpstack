@@ -1,0 +1,10 @@
+[log]
+  main_only = false
+  time = true
+
+[misc]
+  clean_on_exit = true
+
+[screen]
+  clear_on_rebuild = true
+  keep_scroll = true

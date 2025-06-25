@@ -2,55 +2,29 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
-	"sync/atomic"
+
+	"github.com/maniac-en/chirpstack/internal/cfg"
+	"github.com/maniac-en/chirpstack/internal/server"
 )
 
-type apiConfig struct {
-	fileserverHits atomic.Int32
-}
-
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Add(1)
-		w.Header().Add("Cache-Control", "no-cache")
-		next.ServeHTTP(w, r)
-	})
-}
-
 func main() {
-	var apiCfg apiConfig
+	var apiCfg cfg.APIConfig
 	mux := http.NewServeMux()
 	fileserverHandler := http.StripPrefix("/app", http.FileServer(http.Dir('.')))
-	mux.Handle("/app/", apiCfg.middlewareMetricsInc(fileserverHandler))
-	mux.HandleFunc("GET /api/healthz", healthzHandler)
-	mux.HandleFunc("GET /admin/metrics", apiCfg.metricsHandler)
-	mux.HandleFunc("POST /admin/reset", apiCfg.resetMetricsHandler)
-	log.Fatal(http.ListenAndServe(":8080", mux))
-}
 
-func healthzHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(http.StatusText(http.StatusOK)))
-}
+	// app
+	mux.Handle("/app/", apiCfg.MiddlewareMetricsInc(fileserverHandler))
 
-func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `
-		<html>
-  <body>
-    <h1>Welcome, Chirpy Admin</h1>
-    <p>Chirpy has been visited %d times!</p>
-  </body>
-</html>
-`, cfg.fileserverHits.Load())
-}
+	// api
+	mux.HandleFunc("GET /api/healthz", server.HealthzHandler)
+	mux.HandleFunc("POST /api/validate_chirp", server.ValidateChirpHandler)
 
-func (cfg *apiConfig) resetMetricsHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	cfg.fileserverHits.Store(0)
+	// admin
+	mux.HandleFunc("GET /admin/metrics", apiCfg.MetricsHandler)
+	mux.HandleFunc("POST /admin/reset", apiCfg.ResetMetricsHandler)
+
+	loggedMux := server.LogMiddleware(mux)
+	log.Fatal(http.ListenAndServe(":8080", loggedMux))
 }

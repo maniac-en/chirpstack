@@ -1,6 +1,70 @@
-GET http://localhost:8080/app
-GET http://localhost:8080/app/assets
-GET http://localhost:8080/app/assets/logo.png
-GET http://localhost:8080/api/healthz
-POST http://localhost:8080/admin/reset
-GET http://localhost:8080/admin/metrics
+@myhost = http://localhost:8080
+
+### app
+
+GET {{myhost}}/app/
+GET {{myhost}}/app/assets
+GET {{myhost}}/app/assets/logo.png
+
+### admin
+
+GET {{myhost}}/admin/metrics
+POST {{myhost}}/admin/reset
+
+### api
+
+GET {{myhost}}/api/healthz
+
+### testing valid input
+POST {{myhost}}/api/validate_chirp
+Content-Type: application/json
+
+{
+  "body": "I had something interesting for breakfast"
+}
+# @lang=lua
+> {%
+local body = vim.json.decode(response.body)
+print(body.valid == true)
+%}
+
+### testing invalid input
+POST {{myhost}}/api/validate_chirp
+Content-Type: application/json
+
+{
+  "body": "lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
+}
+# @lang=lua
+> {%
+local body = vim.json.decode(response.body)
+print(body.error == "Chirp is too long")
+%}
+
+### testing profane input with extra data
+POST {{myhost}}/api/validate_chirp
+Content-Type: application/json
+
+{
+  "body": "I hear Mastodon is better than Chirpy. sharbert I need to migrate",
+  "extra": "this should be ignored"
+}
+# @lang=lua
+> {%
+local body = vim.json.decode(response.body)
+print(body.cleaned_body == "I hear Mastodon is better than Chirpy. **** I need to migrate")
+%}
+
+### testing only profane input
+POST {{myhost}}/api/validate_chirp
+Content-Type: application/json
+
+{
+  "body": "I really need a kerfuffle to go to bed sooner, Fornax !"
+}
+# @lang=lua
+> {%
+local body = vim.json.decode(response.body)
+print(body.cleaned_body == "I really need a **** to go to bed sooner, **** !")
+%}
+
