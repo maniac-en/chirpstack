@@ -1,0 +1,6 @@
+GET http://localhost:8080/app
+GET http://localhost:8080/app/assets
+GET http://localhost:8080/app/assets/logo.png
+GET http://localhost:8080/api/healthz
+POST http://localhost:8080/admin/reset
+GET http://localhost:8080/admin/metrics
