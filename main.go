@@ -2,15 +2,37 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/maniac-en/chirpstack/internal/cfg"
+	"github.com/maniac-en/chirpstack/internal/database"
 	"github.com/maniac-en/chirpstack/internal/server"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {
-	var apiCfg cfg.APIConfig
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// dbQueries := database.New(db)
+	//
+	// var apiCfg cfg.APIConfig
+	apiCfg := cfg.APIConfig{
+		DBQueries: database.New(db),
+	}
 	mux := http.NewServeMux()
 	fileserverHandler := http.StripPrefix("/app", http.FileServer(http.Dir('.')))
 

@@ -1,13 +1,17 @@
+// Package cfg is used to manage the API config for chirpstack
 package cfg
 
 import (
 	"fmt"
 	"net/http"
 	"sync/atomic"
+
+	"github.com/maniac-en/chirpstack/internal/database"
 )
 
 type APIConfig struct {
 	fileserverHits atomic.Int32
+	DBQueries      *database.Queries
 }
 
 func (cfg *APIConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
