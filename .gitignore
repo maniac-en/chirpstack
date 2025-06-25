@@ -1,3 +1,6 @@
+# tmp directory used by air
+tmp/
+
 # Binaries for programs and plugins
 *.exe
 *.exe~

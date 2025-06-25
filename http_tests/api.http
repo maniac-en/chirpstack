@@ -1,67 +1,66 @@
 @myhost = http://localhost:8080
+@namespace = api
+@baseurl = {{myhost}}/{{namespace}}
 
-### app
+### 1. health endpoint test
+GET {{baseurl}}/healthz
 
-GET {{myhost}}/app/
-GET {{myhost}}/app/assets
-GET {{myhost}}/app/assets/logo.png
+# @lang=lua
+> {%
+print(response.status.code == 200)
+%}
 
-### admin
-
-GET {{myhost}}/admin/metrics
-POST {{myhost}}/admin/reset
-
-### api
-
-GET {{myhost}}/api/healthz
-
-### testing valid input
-POST {{myhost}}/api/validate_chirp
+### 2. testing valid input against validate_chirp
+POST {{baseurl}}/validate_chirp
 Content-Type: application/json
 
 {
   "body": "I had something interesting for breakfast"
 }
+
 # @lang=lua
 > {%
 local body = vim.json.decode(response.body)
 print(body.valid == true)
 %}
 
-### testing invalid input
-POST {{myhost}}/api/validate_chirp
+### 3. testing invalid input against validate_chirp
+POST {{baseurl}}/validate_chirp
 Content-Type: application/json
 
 {
   "body": "lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum."
 }
+
 # @lang=lua
 > {%
 local body = vim.json.decode(response.body)
 print(body.error == "Chirp is too long")
 %}
 
-### testing profane input with extra data
-POST {{myhost}}/api/validate_chirp
+### 4. testing profane input with extra data against validate_chirp
+POST {{baseurl}}/validate_chirp
 Content-Type: application/json
 
 {
   "body": "I hear Mastodon is better than Chirpy. sharbert I need to migrate",
   "extra": "this should be ignored"
 }
+
 # @lang=lua
 > {%
 local body = vim.json.decode(response.body)
 print(body.cleaned_body == "I hear Mastodon is better than Chirpy. **** I need to migrate")
 %}
 
-### testing only profane input
-POST {{myhost}}/api/validate_chirp
+### 5. testing only profane input against validate_chirp
+POST {{baseurl}}/validate_chirp
 Content-Type: application/json
 
 {
   "body": "I really need a kerfuffle to go to bed sooner, Fornax !"
 }
+
 # @lang=lua
 > {%
 local body = vim.json.decode(response.body)

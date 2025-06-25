@@ -1,0 +1,21 @@
+@myhost = http://localhost:8080
+@namespace = admin
+@baseurl = {{myhost}}/{{namespace}}
+
+### 1. get metrics count
+GET {{baseurl}}/metrics
+
+# @lang=lua
+> {%
+local status_code_check = response.status.code == 200
+local body_check = string.find(response.body, "Chirpy has been visited") ~= nil
+print(status_code_check, body_check)
+%}
+
+### 2. reset metrics count
+POST {{baseurl}}/reset
+
+# @lang=lua
+> {%
+print(response.status.code == 200)
+%}
