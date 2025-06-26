@@ -197,3 +197,18 @@ func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 	}
 	utils.RespondWithJSON(w, http.StatusCreated, chirp)
 }
+
+func (cfg *APIConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+	defer r.Body.Close()
+	chirps, err := cfg.DB.GetChirps(r.Context())
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	if len(chirps) > 0 {
+		utils.RespondWithJSON(w, http.StatusOK, chirps)
+	} else {
+		utils.RespondWithJSON(w, http.StatusOK, []database.Chirp{})
+	}
+}

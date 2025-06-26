@@ -91,3 +91,21 @@ POST {{baseurl}}/chirps
   "body": "If you're committed enough, you can make any story work.",
   "user_id": "{{userID}}"
 }
+
+### 8.3 Test chirp-creation (assuming user doesn't exist already)
+POST {{baseurl}}/chirps
+
+{
+  "body": "I once told a woman I was Kevin Costner, and it worked because I believed it.",
+  "user_id": "{{userID}}"
+}
+
+### 9. Get Chirps
+GET {{baseurl}}/chirps
+
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+print(status_check)
+%}
