@@ -77,7 +77,6 @@ func (cfg *APIConfig) MetricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *APIConfig) ResetHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.Body)
 	if cfg.PLATFORM != PlatformDev {
 		utils.RespondWithError(w, http.StatusForbidden, "Operation not allowed")
 		return
@@ -165,4 +164,36 @@ func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.RespondWithJSON(w, http.StatusCreated, usr)
+}
+
+func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Content-Type", "application/json")
+	type requestBody database.CreateChirpParams
+	defer r.Body.Close()
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	params := requestBody{}
+	if err := json.Unmarshal(data, &params); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	if len(params.Body) > 140 {
+		utils.RespondWithError(w, http.StatusBadRequest, "Chirp is too long")
+		return
+	}
+
+	if cleanedChirp, cleaned := utils.RemoveProfanity(params.Body); cleaned {
+		params.Body = cleanedChirp
+	}
+
+	chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams(params))
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	utils.RespondWithJSON(w, http.StatusCreated, chirp)
 }
