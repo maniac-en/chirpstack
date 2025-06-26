@@ -10,11 +10,44 @@ GET {{baseurl}}/healthz
 print(response.status.code == 200)
 %}
 
-### 6. Add User-1
+### 2. Invalid User creation - bad email
 POST {{baseurl}}/users
 
 {
-  "email": "mloneusk@example.co"
+  "email": "bad-email-address",
+  "password": "password"
+}
+
+# @lang=lua
+> {%
+print(
+  response.status.code == 400,
+  vim.json.decode(response.body).error == "Invalid email address"
+)
+%}
+
+### 3. Invalid User creation - bad password (too long)
+POST {{baseurl}}/users
+
+{
+  "email": "valid@domain.co",
+  "password": "passwordpasswordpasswordpasswordpasswordpasswordpasswordpasswordpasswordpasswordpassword"
+}
+
+# @lang=lua
+> {%
+print(
+  response.status.code == 400,
+  vim.json.decode(response.body).error == "password too long"
+)
+%}
+
+### 4. Add User-1
+POST {{baseurl}}/users
+
+{
+  "email": "mloneusk@example.co",
+  "password": "password"
 }
 
 # @lang=lua
@@ -29,11 +62,12 @@ local body_check_4 = vim.json.decode(response.body).email == "mloneusk@example.c
 print(status_check, content_type_check, body_check_1, body_check_2, body_check_3, body_check_4)
 %}
 
-### 7. Add User-2
+### 5. Add User-2
 POST {{baseurl}}/users
 
 {
-  "email": "dackjorsey@example.co"
+  "email": "dackjorsey@example.co",
+  "password": "password"
 }
 
 # @lang=lua
@@ -48,26 +82,12 @@ local body_check_4 = vim.json.decode(response.body).email == "dackjorsey@example
 print(status_check, content_type_check, body_check_1, body_check_2, body_check_3, body_check_4)
 %}
 
-### 8. Invalid User
+### 6.1 Test chirp-creation (assuming user doesn't exist already)
 POST {{baseurl}}/users
 
 {
-  "email": "bad-email-address"
-}
-
-# @lang=lua
-> {%
-print(
-  response.status.code == 400,
-  vim.json.decode(response.body).error == "Invalid email address"
-)
-%}
-
-### 8.1 Test chirp-creation (assuming user doesn't exist already)
-POST {{baseurl}}/users
-
-{
-  "email": "saul@bettercall.com"
+  "email": "saul@bettercall.com",
+  "password": "password"
 }
 
 
@@ -84,7 +104,7 @@ print(status_check, content_type_check, body_check_1, body_check_2, body_check_3
 client.global.set("userID", vim.json.decode(response.body).id)
 %}
 
-### 8.2 Test chirp-creation (assuming user doesn't exist already)
+### 6.2 Test chirp-creation (assuming user doesn't exist already)
 POST {{baseurl}}/chirps
 
 {
@@ -92,7 +112,12 @@ POST {{baseurl}}/chirps
   "user_id": "{{userID}}"
 }
 
-### 8.3 Test chirp-creation (assuming user doesn't exist already)
+# @lang=lua
+> {%
+print(response.status.code == 201)
+%}
+
+### 6.3 Test chirp-creation (assuming user doesn't exist already)
 POST {{baseurl}}/chirps
 
 {
@@ -105,7 +130,7 @@ POST {{baseurl}}/chirps
 client.global.set("chirpID", vim.json.decode(response.body).id)
 %}
 
-### 9. Get Chirps
+### 9. Get Chirps for all users
 GET {{baseurl}}/chirps
 
 
@@ -123,4 +148,32 @@ GET {{baseurl}}/chirps/{{chirpID}}
 local status_check = response.status.code == 200
 local body_check = vim.json.decode(response.body).body == "I once told a woman I was Kevin Costner, and it worked because I believed it."
 print(status_check, body_check)
+%}
+
+### 11.1 Auth Login check (create the user to test it's login, assuming it
+#doesn't exist already)
+POST {{baseurl}}/users
+
+{
+  "email": "saul@bettercall.com",
+  "password": "password"
+}
+
+# @lang=lua
+> {%
+print(response.status.code == 200)
+%}
+
+### 11.2 Auth Login check (create the user to test it's login, assuming it
+#doesn't exist already)
+POST {{baseurl}}/login
+
+{
+  "email": "saul@bettercall.com",
+  "password": "password"
+}
+
+# @lang=lua
+> {%
+print(response.status.code == 200)
 %}

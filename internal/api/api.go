@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"github.com/maniac-en/chirpstack/internal/auth"
 	"github.com/maniac-en/chirpstack/internal/database"
 	"github.com/maniac-en/chirpstack/internal/utils"
 )
@@ -91,8 +92,8 @@ func (cfg *APIConfig) ResetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusNoContent)
-	w.Write([]byte(http.StatusText(http.StatusNoContent)))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
 func (cfg *APIConfig) HealthzHandler(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +140,8 @@ func (cfg *APIConfig) ValidateChirpHandler(w http.ResponseWriter, r *http.Reques
 
 func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 	type requestBody struct {
-		Email string `json:"email"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 	defer r.Body.Close()
 	data, err := io.ReadAll(r.Body)
@@ -159,12 +161,70 @@ func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usr, err := cfg.DB.CreateUser(r.Context(), params.Email)
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		if err.Error() == auth.ErrPasswordTooLong {
+			utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+			return
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+			return
+		}
+	}
+
+	newUserParams := database.CreateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+	}
+
+	newUser, err := cfg.DB.CreateUser(r.Context(), newUserParams)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
-	utils.RespondWithJSON(w, http.StatusCreated, usr)
+	utils.RespondWithJSON(w, http.StatusCreated, newUser)
+}
+
+func (cfg *APIConfig) LoginUser(w http.ResponseWriter, r *http.Request) {
+	type requestBody struct {
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	defer r.Body.Close()
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	params := requestBody{}
+	if err := json.Unmarshal(data, &params); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	_, err = mail.ParseAddress(params.Email)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid email address")
+		return
+	}
+
+	storedUserInfo, err := cfg.DB.GetUserByEmail(r.Context(), params.Email)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	err = auth.CheckPasswordHash(params.Password, storedUserInfo.HashedPassword)
+	if err != nil {
+		if err.Error() == auth.ErrIncorrectEmailOrPassword {
+			utils.RespondWithError(w, http.StatusUnauthorized, err.Error())
+			return
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+			return
+		}
+	}
+	utils.RespondWithJSON(w, http.StatusOK, storedUserInfo)
 }
 
 func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
