@@ -2,7 +2,9 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,6 +12,7 @@ import (
 	"net/mail"
 	"sync/atomic"
 
+	"github.com/google/uuid"
 	"github.com/maniac-en/chirpstack/internal/database"
 	"github.com/maniac-en/chirpstack/internal/utils"
 )
@@ -99,7 +102,6 @@ func (cfg *APIConfig) HealthzHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *APIConfig) ValidateChirpHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
 	type requestBody struct {
 		Body string `json:"body"`
 	}
@@ -136,7 +138,6 @@ func (cfg *APIConfig) ValidateChirpHandler(w http.ResponseWriter, r *http.Reques
 }
 
 func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
 	type requestBody struct {
 		Email string `json:"email"`
 	}
@@ -167,7 +168,6 @@ func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
 	type requestBody database.CreateChirpParams
 	defer r.Body.Close()
 	data, err := io.ReadAll(r.Body)
@@ -199,7 +199,6 @@ func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *APIConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
 	defer r.Body.Close()
 	chirps, err := cfg.DB.GetChirps(r.Context())
 	if err != nil {
@@ -211,4 +210,28 @@ func (cfg *APIConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
 	} else {
 		utils.RespondWithJSON(w, http.StatusOK, []database.Chirp{})
 	}
+}
+
+func (cfg *APIConfig) GetChirpByID(w http.ResponseWriter, r *http.Request) {
+	chirpID := r.PathValue("id")
+	if chirpID == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "No chirp ID passed")
+		return
+	}
+	chirpUUID, err := uuid.Parse(chirpID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Invalid chirp ID passed")
+		return
+	}
+
+	chirp, err := cfg.DB.GetChirpByID(r.Context(), chirpUUID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.RespondWithError(w, http.StatusNotFound, "No chirp found")
+			return
+		}
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	utils.RespondWithJSON(w, http.StatusOK, chirp)
 }

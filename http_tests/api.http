@@ -100,6 +100,11 @@ POST {{baseurl}}/chirps
   "user_id": "{{userID}}"
 }
 
+# @lang=lua
+> {%
+client.global.set("chirpID", vim.json.decode(response.body).id)
+%}
+
 ### 9. Get Chirps
 GET {{baseurl}}/chirps
 
@@ -108,4 +113,14 @@ GET {{baseurl}}/chirps
 > {%
 local status_check = response.status.code == 200
 print(status_check)
+%}
+
+### 10. Get Chirp by ID
+GET {{baseurl}}/chirps/{{chirpID}}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local body_check = vim.json.decode(response.body).body == "I once told a woman I was Kevin Costner, and it worked because I believed it."
+print(status_check, body_check)
 %}
