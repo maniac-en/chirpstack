@@ -3,13 +3,13 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 
-	"github.com/maniac-en/chirpstack/internal/cfg"
+	"github.com/maniac-en/chirpstack/internal/api"
 	"github.com/maniac-en/chirpstack/internal/database"
-	"github.com/maniac-en/chirpstack/internal/server"
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
@@ -21,17 +21,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	dbURL := os.Getenv("DB_URL")
-	db, err := sql.Open("postgres", dbURL)
+	db, err1 := sql.Open("postgres", os.Getenv("DB_URL"))
+	platform, err2 := api.ParsePlatform(os.Getenv("PLATFORM"))
+	err = errors.Join(err1, err2)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// dbQueries := database.New(db)
-	//
-	// var apiCfg cfg.APIConfig
-	apiCfg := cfg.APIConfig{
-		DBQueries: database.New(db),
+	apiCfg := api.APIConfig{
+		DB:       database.New(db),
+		PLATFORM: platform,
 	}
 	mux := http.NewServeMux()
 	fileserverHandler := http.StripPrefix("/app", http.FileServer(http.Dir('.')))
@@ -40,13 +39,14 @@ func main() {
 	mux.Handle("/app/", apiCfg.MiddlewareMetricsInc(fileserverHandler))
 
 	// api
-	mux.HandleFunc("GET /api/healthz", server.HealthzHandler)
-	mux.HandleFunc("POST /api/validate_chirp", server.ValidateChirpHandler)
+	mux.HandleFunc("GET /api/healthz", apiCfg.HealthzHandler)
+	mux.HandleFunc("POST /api/validate_chirp", apiCfg.ValidateChirpHandler)
+	mux.HandleFunc("POST /api/users", apiCfg.CreateUser)
 
 	// admin
 	mux.HandleFunc("GET /admin/metrics", apiCfg.MetricsHandler)
-	mux.HandleFunc("POST /admin/reset", apiCfg.ResetMetricsHandler)
+	mux.HandleFunc("POST /admin/reset", apiCfg.ResetHandler)
 
-	loggedMux := server.LogMiddleware(mux)
+	loggedMux := apiCfg.LogMiddleware(mux)
 	log.Fatal(http.ListenAndServe(":8080", loggedMux))
 }

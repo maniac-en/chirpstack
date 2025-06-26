@@ -67,3 +67,40 @@ local body = vim.json.decode(response.body)
 print(body.cleaned_body == "I really need a **** to go to bed sooner, **** !")
 %}
 
+### 6. Add User-1
+POST {{baseurl}}/users
+
+{
+  "email": "mloneusk@example.co"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 201
+local content_type_check = response.headers["content-type"][1] == "application/json"
+local body = response.body
+local body_check_1 = string.find(body, "id") ~= nil
+local body_check_2 = string.find(body, "created_at") ~= nil
+local body_check_3 = string.find(body, "updated_at") ~= nil
+local body_check_4 = vim.json.decode(response.body).email == "mloneusk@example.co"
+print(status_check, content_type_check, body_check_1, body_check_2, body_check_3, body_check_4)
+%}
+
+### 7. Add User-2
+POST {{baseurl}}/users
+
+{
+  "email": "dackjorsey@example.co"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 201
+local content_type_check = response.headers["content-type"][1] == "application/json"
+local body = response.body
+local body_check_1 = string.find(body, "id") ~= nil
+local body_check_2 = string.find(body, "created_at") ~= nil
+local body_check_3 = string.find(body, "updated_at") ~= nil
+local body_check_4 = vim.json.decode(response.body).email == "dackjorsey@example.co"
+print(status_check, content_type_check, body_check_1, body_check_2, body_check_3, body_check_4)
+%}
