@@ -28,9 +28,15 @@ func main() {
 		log.Fatal(err)
 	}
 
+	jwtTokenSecret := os.Getenv("JWT_TOKEN_SECRET")
+	if jwtTokenSecret == "" {
+		log.Fatal("empty secret found for JWT signing")
+	}
+
 	apiCfg := api.APIConfig{
-		DB:       database.New(db),
-		PLATFORM: platform,
+		DB:             database.New(db),
+		Platform:       platform,
+		JWTTokenSecret: jwtTokenSecret,
 	}
 	mux := http.NewServeMux()
 	fileserverHandler := http.StripPrefix("/app", http.FileServer(http.Dir('.')))
@@ -40,11 +46,13 @@ func main() {
 
 	// api
 	mux.HandleFunc("GET /api/healthz", apiCfg.HealthzHandler)
-	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.GetChirpByID)
+
 	mux.HandleFunc("GET /api/chirps", apiCfg.GetChirps)
+	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.GetChirpByID)
+	mux.HandleFunc("POST /api/chirps", apiCfg.CreateChirps)
+
 	mux.HandleFunc("POST /api/users", apiCfg.CreateUser)
 	mux.HandleFunc("POST /api/login", apiCfg.LoginUser)
-	mux.HandleFunc("POST /api/chirps", apiCfg.CreateChirps)
 
 	// admin
 	mux.HandleFunc("GET /admin/metrics", apiCfg.MetricsHandler)

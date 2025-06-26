@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/mail"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/maniac-en/chirpstack/internal/auth"
@@ -49,7 +50,8 @@ func ParsePlatform(s string) (Platform, error) {
 type APIConfig struct {
 	fileserverHits atomic.Int32
 	DB             *database.Queries
-	PLATFORM       Platform
+	Platform       Platform
+	JWTTokenSecret string
 }
 
 func (cfg *APIConfig) MiddlewareMetricsInc(next http.Handler) http.Handler {
@@ -81,7 +83,7 @@ func (cfg *APIConfig) MetricsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *APIConfig) ResetHandler(w http.ResponseWriter, r *http.Request) {
-	if cfg.PLATFORM != PlatformDev {
+	if cfg.Platform != PlatformDev {
 		utils.RespondWithError(w, http.StatusForbidden, "Operation not allowed")
 		return
 	}
@@ -187,8 +189,13 @@ func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *APIConfig) LoginUser(w http.ResponseWriter, r *http.Request) {
 	type requestBody struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
+		Password        string `json:"password"`
+		Email           string `json:"email"`
+		ExpiryInSeconds int    `json:"expiry_in_seconds,omitempty"`
+	}
+	type responseBody struct {
+		database.User
+		Token string `json:"token"`
 	}
 	defer r.Body.Close()
 	data, err := io.ReadAll(r.Body)
@@ -202,18 +209,21 @@ func (cfg *APIConfig) LoginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check if passed email is valid or not
 	_, err = mail.ParseAddress(params.Email)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusBadRequest, "Invalid email address")
 		return
 	}
 
+	// fetch user info from DB
 	storedUserInfo, err := cfg.DB.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
 
+	// validate user's password hash
 	err = auth.CheckPasswordHash(params.Password, storedUserInfo.HashedPassword)
 	if err != nil {
 		if err.Error() == auth.ErrIncorrectEmailOrPassword {
@@ -224,11 +234,44 @@ func (cfg *APIConfig) LoginUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	utils.RespondWithJSON(w, http.StatusOK, storedUserInfo)
+
+	// check/set expiry_in_seconds
+	var expiryDuration time.Duration
+	maxExpiry := time.Hour
+	if params.ExpiryInSeconds == 0 || time.Duration(params.ExpiryInSeconds)*time.Second > maxExpiry {
+		expiryDuration = maxExpiry
+	} else {
+		expiryDuration = time.Duration(params.ExpiryInSeconds) * time.Second
+	}
+
+	jwtToken, err := auth.MakeJWT(storedUserInfo.ID, cfg.JWTTokenSecret, expiryDuration)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	res := responseBody{
+		User:  storedUserInfo,
+		Token: jwtToken,
+	}
+	utils.RespondWithJSON(w, http.StatusOK, res)
 }
 
 func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
-	type requestBody database.CreateChirpParams
+	jwtToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userID, err := auth.ValidateJWT(jwtToken, cfg.JWTTokenSecret)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	type requestBody struct {
+		Body string `json:"body"`
+	}
 	defer r.Body.Close()
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -250,7 +293,13 @@ func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		params.Body = cleanedChirp
 	}
 
-	chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams(params))
+	chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body: params.Body,
+		UserID: uuid.NullUUID{
+			UUID:  userID,
+			Valid: true,
+		},
+	})
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
