@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/mail"
 	"sync/atomic"
 
 	"github.com/maniac-en/chirpstack/internal/database"
@@ -151,7 +152,13 @@ func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
-	// @@@(this is where we should validate the email)
+
+	_, err = mail.ParseAddress(params.Email)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid email address")
+		return
+	}
+
 	usr, err := cfg.DB.CreateUser(r.Context(), params.Email)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
