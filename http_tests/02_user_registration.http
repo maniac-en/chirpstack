@@ -63,7 +63,8 @@ Content-Type: application/json
 
 {
   "email": "test@example.com",
-  "password": "{{$randomAlphaNumeric:80}}"
+  "password":
+  "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
 }
 
 # @lang=lua

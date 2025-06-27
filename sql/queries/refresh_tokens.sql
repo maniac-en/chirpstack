@@ -11,7 +11,7 @@ VALUES (
 RETURNING *;
 
 -- name: GetUserFromRefreshToken :one
-SELECT user_id
+SELECT token, created_at, updated_at, user_id, expires_at, revoked_at
 FROM refresh_tokens
 WHERE 1=1
 AND token = $1

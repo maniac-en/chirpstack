@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -251,6 +252,43 @@ func TestAPIConfig_MiddlewareChaining(t *testing.T) {
 	// Check that original request headers were preserved
 	if receivedHeaders.Get("User-Agent") != "test-agent" {
 		t.Errorf("User-Agent header = %v, want 'test-agent'", receivedHeaders.Get("User-Agent"))
+	}
+}
+
+func TestAPIConfig_RefreshUserToken_MissingAuthHeader(t *testing.T) {
+	cfg := &APIConfig{}
+
+	req := httptest.NewRequest("POST", "/api/refresh", nil)
+	w := httptest.NewRecorder()
+
+	cfg.RefreshUserToken(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, w.Code)
+	}
+
+	expected := `{"error":"authorization header not found in request"}`
+	if strings.TrimSpace(w.Body.String()) != expected {
+		t.Errorf("Expected body %q, got %q", expected, strings.TrimSpace(w.Body.String()))
+	}
+}
+
+func TestAPIConfig_RefreshUserToken_InvalidAuthHeader(t *testing.T) {
+	cfg := &APIConfig{}
+
+	req := httptest.NewRequest("POST", "/api/refresh", nil)
+	req.Header.Set("Authorization", "InvalidFormat")
+	w := httptest.NewRecorder()
+
+	cfg.RefreshUserToken(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status %d, got %d", http.StatusUnauthorized, w.Code)
+	}
+
+	expected := `{"error":"invalid authorization header found in request"}`
+	if strings.TrimSpace(w.Body.String()) != expected {
+		t.Errorf("Expected body %q, got %q", expected, strings.TrimSpace(w.Body.String()))
 	}
 }
 

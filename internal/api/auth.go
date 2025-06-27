@@ -3,8 +3,8 @@ package api
 import (
 	"encoding/json"
 	"io"
-	"net/mail"
 	"net/http"
+	"net/mail"
 
 	"github.com/google/uuid"
 	"github.com/maniac-en/chirpstack/internal/auth"
@@ -102,13 +102,20 @@ func (cfg *APIConfig) RefreshUserToken(w http.ResponseWriter, r *http.Request) {
 
 	// check if it's a valid refresh token, and if yes, return it,
 	// if not found or valid, return 401
-	_, err = cfg.DB.GetUserFromRefreshToken(r.Context(), refreshTokenString)
+	refreshToken, err := cfg.DB.GetUserFromRefreshToken(r.Context(), refreshTokenString)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusUnauthorized, "invalid refresh token")
 		return
 	}
 
-	utils.RespondWithJSON(w, http.StatusOK, responseBody{refreshTokenString})
+	// generate a new access token for user (jwt)
+	jwtToken, err := auth.MakeJWT(refreshToken.UserID.UUID, cfg.JWTTokenSecret)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	utils.RespondWithJSON(w, http.StatusOK, responseBody{jwtToken})
 }
 
 func (cfg *APIConfig) RevokeUserToken(w http.ResponseWriter, r *http.Request) {

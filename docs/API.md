@@ -305,10 +305,6 @@ All error responses follow this format:
 - **404 Not Found**: Resource not found
 - **500 Internal Server Error**: Server error
 
-## Rate Limiting
-
-Currently, no rate limiting is implemented.
-
 ## Data Validation
 
 ### Email Validation
