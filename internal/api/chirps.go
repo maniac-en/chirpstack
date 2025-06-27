@@ -101,11 +101,31 @@ func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *APIConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
+	// check for optional author_id param
+	authorID := r.URL.Query().Get("author_id")
 	defer r.Body.Close()
-	chirps, err := cfg.DB.GetChirps(r.Context())
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
-		return
+	var chirps []database.Chirp
+	var err error
+	if authorID != "" {
+		authorUUID, err := uuid.Parse(authorID)
+		if err != nil {
+			utils.RespondWithError(w, http.StatusNoContent, "invalid author id")
+			return
+		}
+		chirps, err = cfg.DB.GetChirpsByAuthorID(r.Context(), uuid.NullUUID{
+			UUID:  authorUUID,
+			Valid: true,
+		})
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+			return
+		}
+	} else {
+		chirps, err = cfg.DB.GetChirps(r.Context())
+		if err != nil {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+			return
+		}
 	}
 	if len(chirps) > 0 {
 		utils.RespondWithJSON(w, http.StatusOK, chirps)
@@ -187,3 +207,4 @@ func (cfg *APIConfig) DeleteChirp(w http.ResponseWriter, r *http.Request) {
 	}
 	utils.RespondWithJSON(w, http.StatusNoContent, nil)
 }
+
