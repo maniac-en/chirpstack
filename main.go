@@ -45,7 +45,7 @@ func main() {
 	mux.Handle("/app/", apiCfg.MiddlewareMetricsInc(fileserverHandler))
 
 	// api
-	mux.HandleFunc("GET /api/healthz", apiCfg.HealthzHandler)
+	mux.HandleFunc("GET /api/health", apiCfg.HealthHandler)
 
 	mux.HandleFunc("GET /api/chirps", apiCfg.GetChirps)
 	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.GetChirpByID)
@@ -55,6 +55,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.LoginUser)
 	mux.HandleFunc("POST /api/refresh", apiCfg.RefreshUserToken)
 	mux.HandleFunc("POST /api/revoke", apiCfg.RevokeUserToken)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.UpgradeUser)
 
 	mux.HandleFunc("PUT /api/users", apiCfg.UpdateUser)
 

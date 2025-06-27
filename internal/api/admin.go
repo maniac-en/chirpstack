@@ -36,8 +36,9 @@ func (cfg *APIConfig) ResetHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
-func (cfg *APIConfig) HealthzHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *APIConfig) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
+
