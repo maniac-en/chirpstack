@@ -228,6 +228,56 @@ func (cfg *APIConfig) GetChirpByID(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJSON(w, http.StatusOK, chirp)
 }
 
+func (cfg *APIConfig) DeleteChirp(w http.ResponseWriter, r *http.Request) {
+	// check for jwt existence, else return 403
+	jwtToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusForbidden, "operation not allowed")
+		return
+	}
+
+	// validate jwt, else return 403
+	userID, err := auth.ValidateJWT(jwtToken, cfg.JWTTokenSecret)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusForbidden, "operation not allowed")
+		return
+	}
+
+	// check for chirp's existence, else return 404
+	chirpID := r.PathValue("id")
+	if chirpID == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "No chirp ID passed")
+		return
+	}
+	chirpUUID, err := uuid.Parse(chirpID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Invalid chirp ID passed")
+		return
+	}
+	chirp, err := cfg.DB.GetChirpByID(r.Context(), chirpUUID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.RespondWithError(w, http.StatusNotFound, "No chirp found")
+			return
+		}
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	// check if user is authorized, else return 403
+	if chirp.UserID.UUID != userID {
+		utils.RespondWithError(w, http.StatusForbidden, "operation not allowed")
+		return
+	}
+
+	err = cfg.DB.DeleteChirpByID(r.Context(), chirp.ID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	utils.RespondWithJSON(w, http.StatusNoContent, nil)
+}
+
 func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 	type requestBody struct {
 		Password string `json:"password"`
