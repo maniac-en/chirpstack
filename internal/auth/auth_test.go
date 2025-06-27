@@ -3,7 +3,6 @@ package auth
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -150,48 +149,42 @@ func TestCheckPasswordHash(t *testing.T) {
 func TestMakeJWT(t *testing.T) {
 	userID := uuid.New()
 	tokenSecret := "test-secret-key"
-	expiresIn := time.Hour
 
 	tests := []struct {
 		name        string
 		userID      uuid.UUID
 		tokenSecret string
-		expiresIn   time.Duration
 		wantErr     bool
 	}{
 		{
 			name:        "valid JWT creation",
 			userID:      userID,
 			tokenSecret: tokenSecret,
-			expiresIn:   expiresIn,
 			wantErr:     false,
 		},
 		{
 			name:        "empty token secret",
 			userID:      userID,
 			tokenSecret: "",
-			expiresIn:   expiresIn,
 			wantErr:     false, // JWT library allows empty secret
 		},
 		{
 			name:        "zero expiration",
 			userID:      userID,
 			tokenSecret: tokenSecret,
-			expiresIn:   0,
 			wantErr:     false,
 		},
 		{
 			name:        "negative expiration",
 			userID:      userID,
 			tokenSecret: tokenSecret,
-			expiresIn:   -time.Hour,
 			wantErr:     false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			token, err := MakeJWT(tt.userID, tt.tokenSecret, tt.expiresIn)
+			token, err := MakeJWT(tt.userID, tt.tokenSecret)
 
 			if tt.wantErr {
 				if err == nil {
@@ -221,22 +214,15 @@ func TestMakeJWT(t *testing.T) {
 func TestValidateJWT(t *testing.T) {
 	userID := uuid.New()
 	tokenSecret := "test-secret-key"
-	expiresIn := time.Hour
 
 	// Create a valid token for testing
-	validToken, err := MakeJWT(userID, tokenSecret, expiresIn)
+	validToken, err := MakeJWT(userID, tokenSecret)
 	if err != nil {
 		t.Fatalf("Failed to create test token: %v", err)
 	}
 
-	// Create an expired token
-	expiredToken, err := MakeJWT(userID, tokenSecret, -time.Hour)
-	if err != nil {
-		t.Fatalf("Failed to create expired test token: %v", err)
-	}
-
 	// Create token with different secret
-	differentSecretToken, err := MakeJWT(userID, "different-secret", expiresIn)
+	differentSecretToken, err := MakeJWT(userID, "different-secret")
 	if err != nil {
 		t.Fatalf("Failed to create different secret test token: %v", err)
 	}
@@ -254,12 +240,6 @@ func TestValidateJWT(t *testing.T) {
 			tokenSecret: tokenSecret,
 			wantUserID:  userID,
 			wantErr:     false,
-		},
-		{
-			name:        "expired token",
-			tokenString: expiredToken,
-			tokenSecret: tokenSecret,
-			wantErr:     true,
 		},
 		{
 			name:        "wrong secret",
@@ -319,10 +299,9 @@ func TestValidateJWT(t *testing.T) {
 func TestJWTRoundTrip(t *testing.T) {
 	userID := uuid.New()
 	tokenSecret := "test-secret-key"
-	expiresIn := time.Hour
 
 	// Create token
-	token, err := MakeJWT(userID, tokenSecret, expiresIn)
+	token, err := MakeJWT(userID, tokenSecret)
 	if err != nil {
 		t.Fatalf("Failed to create token: %v", err)
 	}

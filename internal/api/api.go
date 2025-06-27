@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"net/mail"
 	"sync/atomic"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/maniac-en/chirpstack/internal/auth"
@@ -189,13 +188,13 @@ func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *APIConfig) LoginUser(w http.ResponseWriter, r *http.Request) {
 	type requestBody struct {
-		Password        string `json:"password"`
-		Email           string `json:"email"`
-		ExpiryInSeconds int    `json:"expiry_in_seconds,omitempty"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 	type responseBody struct {
 		database.User
-		Token string `json:"token"`
+		Token        string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 	defer r.Body.Close()
 	data, err := io.ReadAll(r.Body)
@@ -235,25 +234,72 @@ func (cfg *APIConfig) LoginUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// check/set expiry_in_seconds
-	var expiryDuration time.Duration
-	maxExpiry := time.Hour
-	if params.ExpiryInSeconds == 0 || time.Duration(params.ExpiryInSeconds)*time.Second > maxExpiry {
-		expiryDuration = maxExpiry
-	} else {
-		expiryDuration = time.Duration(params.ExpiryInSeconds) * time.Second
-	}
-
-	jwtToken, err := auth.MakeJWT(storedUserInfo.ID, cfg.JWTTokenSecret, expiryDuration)
+	// generate an access token for user (jwt)
+	jwtToken, err := auth.MakeJWT(storedUserInfo.ID, cfg.JWTTokenSecret)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
+
+	// generate and store a refresh token for user
+	refreshTokenString, _ := auth.MakeRefreshToken()
+	refreshToken, err := cfg.DB.StoreRefreshToken(r.Context(), database.StoreRefreshTokenParams{
+		Token: refreshTokenString,
+		UserID: uuid.NullUUID{
+			UUID:  storedUserInfo.ID,
+			Valid: true,
+		},
+	})
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
 	res := responseBody{
-		User:  storedUserInfo,
-		Token: jwtToken,
+		User:         storedUserInfo,
+		Token:        jwtToken,
+		RefreshToken: refreshToken.Token,
 	}
 	utils.RespondWithJSON(w, http.StatusOK, res)
+}
+
+func (cfg *APIConfig) RefreshUserToken(w http.ResponseWriter, r *http.Request) {
+	type responseBody struct {
+		Token string `json:"token"`
+	}
+	// get refresh token from headers
+	refreshTokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	// check if it's a valid refresh token, and if yes, return it,
+	// if not found or valid, return 401
+	_, err = cfg.DB.GetUserFromRefreshToken(r.Context(), refreshTokenString)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid refresh token")
+		return
+	}
+
+	utils.RespondWithJSON(w, http.StatusOK, responseBody{refreshTokenString})
+}
+
+func (cfg *APIConfig) RevokeUserToken(w http.ResponseWriter, r *http.Request) {
+	// get refresh token from headers
+	refreshTokenString, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	_, err = cfg.DB.RevokeRefreshToken(r.Context(), refreshTokenString)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	utils.RespondWithJSON(w, http.StatusNoContent, nil)
 }
 
 func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {

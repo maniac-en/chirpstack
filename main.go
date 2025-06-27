@@ -53,6 +53,8 @@ func main() {
 
 	mux.HandleFunc("POST /api/users", apiCfg.CreateUser)
 	mux.HandleFunc("POST /api/login", apiCfg.LoginUser)
+	mux.HandleFunc("POST /api/refresh", apiCfg.RefreshUserToken)
+	mux.HandleFunc("POST /api/revoke", apiCfg.RevokeUserToken)
 
 	// admin
 	mux.HandleFunc("GET /admin/metrics", apiCfg.MetricsHandler)
