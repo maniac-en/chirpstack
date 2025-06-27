@@ -15,7 +15,7 @@ func RemoveProfanity(chirp string) (string, bool) {
 	}
 	var cleanedChirpWords []string
 	var profanityFound bool
-	for _, word := range strings.Split(chirp, " ") {
+	for word := range strings.SplitSeq(chirp, " ") {
 		if len(word) == 0 {
 			continue
 		}

@@ -1,0 +1,78 @@
+@myhost = http://localhost:8080
+@baseurl = {{myhost}}/api
+
+### User Registration - Valid User
+POST {{baseurl}}/users
+Content-Type: application/json
+
+{
+  "email": "john.doe@example.com",
+  "password": "securepassword123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 201
+local content_type_check = response.headers["content-type"][1] == "application/json"
+local body = vim.json.decode(response.body)
+
+local has_id = body.id ~= nil
+local has_email = body.email == "john.doe@example.com"
+local has_created_at = body.created_at ~= nil
+local has_updated_at = body.updated_at ~= nil
+local no_password = body.hashed_password == nil
+
+print("Status 201:", status_check)
+print("Content-Type JSON:", content_type_check)
+print("Has ID:", has_id)
+print("Email correct:", has_email)
+print("Has created_at:", has_created_at)
+print("Has updated_at:", has_updated_at)
+print("Password hidden:", no_password)
+print("Overall:", status_check and content_type_check and has_id and has_email and has_created_at and has_updated_at and no_password)
+
+-- Store user ID for later tests
+if body.id then
+    client.global.set("user1_id", body.id)
+end
+%}
+
+### User Registration - Invalid Email
+POST {{baseurl}}/users
+Content-Type: application/json
+
+{
+  "email": "invalid-email",
+  "password": "password123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 400
+local body = vim.json.decode(response.body)
+local error_check = body.error == "Invalid email address"
+
+print("Status 400:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### User Registration - Password Too Long
+POST {{baseurl}}/users
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "{{$randomAlphaNumeric:80}}"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 400
+local body = vim.json.decode(response.body)
+local error_check = body.error == "password too long"
+
+print("Status 400:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}

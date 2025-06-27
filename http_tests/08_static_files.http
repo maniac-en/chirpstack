@@ -1,0 +1,83 @@
+@myhost = http://localhost:8080
+@baseurl = {{myhost}}/app
+
+### Static Files - Root should return 404
+GET {{myhost}}/
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 404
+print("Status 404:", status_check)
+print("Overall:", status_check)
+%}
+
+### Static Files - Index HTML
+GET {{baseurl}}/
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local content_type_check = response.headers["content-type"][1] == "text/html; charset=utf-8"
+local body_check = string.find(response.body, "Welcome to Chirpy") ~= nil
+local cache_control_check = response.headers["cache-control"][1] == "no-cache"
+
+print("Status 200:", status_check)
+print("Content-Type HTML:", content_type_check)
+print("Has welcome message:", body_check)
+print("Cache-Control no-cache:", cache_control_check)
+print("Overall:", status_check and content_type_check and body_check and cache_control_check)
+%}
+
+### Static Files - Assets Directory Listing
+GET {{baseurl}}/assets
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local content_type_check = response.headers["content-type"][1] == "text/html; charset=utf-8"
+local body_check = string.find(response.body, "logo.png") ~= nil
+local cache_control_check = response.headers["cache-control"][1] == "no-cache"
+
+print("Status 200:", status_check)
+print("Content-Type HTML:", content_type_check)
+print("Has logo.png link:", body_check)
+print("Cache-Control no-cache:", cache_control_check)
+print("Overall:", status_check and content_type_check and body_check and cache_control_check)
+%}
+
+### Static Files - Logo PNG
+GET {{baseurl}}/assets/logo.png
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local content_type_check = response.headers["content-type"][1] == "image/png"
+local cache_control_check = response.headers["cache-control"][1] == "no-cache"
+local has_content = string.len(response.body) > 0
+
+print("Status 200:", status_check)
+print("Content-Type PNG:", content_type_check)
+print("Cache-Control no-cache:", cache_control_check)
+print("Has content:", has_content)
+print("Overall:", status_check and content_type_check and cache_control_check and has_content)
+%}
+
+### Static Files - Non-existent File
+GET {{baseurl}}/nonexistent.html
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 404
+print("Status 404:", status_check)
+print("Overall:", status_check)
+%}
+
+### Static Files - Path Traversal Attempt (Should be blocked)
+GET {{baseurl}}/../go.mod
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 404
+print("Status 404 (path traversal blocked):", status_check)
+print("Overall:", status_check)
+%}

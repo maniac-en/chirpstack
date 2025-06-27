@@ -1,0 +1,127 @@
+@myhost = http://localhost:8080
+@baseurl = {{myhost}}/api
+
+### Setup - Create and Login User for Management Tests
+POST {{baseurl}}/users
+Content-Type: application/json
+
+{
+  "email": "user.management@example.com",
+  "password": "testpassword123"
+}
+
+# @lang=lua
+> {%
+print("User created:", response.status.code == 201)
+%}
+
+### Login to get auth token
+POST {{baseurl}}/login
+Content-Type: application/json
+
+{
+  "email": "user.management@example.com",
+  "password": "testpassword123"
+}
+
+# @lang=lua
+> {%
+local body = vim.json.decode(response.body)
+if body.token then
+    client.global.set("mgmt_token", body.token)
+    client.global.set("mgmt_user_id", body.id)
+end
+print("Login successful:", response.status.code == 200)
+%}
+
+### Update User - Valid Data
+PUT {{baseurl}}/users
+Authorization: Bearer {{mgmt_token}}
+Content-Type: application/json
+
+{
+  "email": "updated.user@example.com",
+  "password": "newpassword123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local content_type_check = response.headers["content-type"][1] == "application/json"
+local body = vim.json.decode(response.body)
+
+local email_updated = body.email == "updated.user@example.com"
+local has_id = body.id ~= nil
+local has_updated_at = body.updated_at ~= nil
+local no_password = body.hashed_password == nil
+
+print("Status 200:", status_check)
+print("Content-Type JSON:", content_type_check)
+print("Email updated:", email_updated)
+print("Has ID:", has_id)
+print("Has updated_at:", has_updated_at)
+print("Password hidden:", no_password)
+print("Overall:", status_check and content_type_check and email_updated and has_id and has_updated_at and no_password)
+%}
+
+### Update User - No Authorization Header
+PUT {{baseurl}}/users
+Content-Type: application/json
+
+{
+  "email": "unauthorized@example.com",
+  "password": "password123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 401
+local body = vim.json.decode(response.body)
+local error_check = body.error == "authorization header not found in request"
+
+print("Status 401:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Update User - Invalid Token
+PUT {{baseurl}}/users
+Authorization: Bearer invalid-jwt-token
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 401
+local body = vim.json.decode(response.body)
+local error_check = body.error == "invalid token"
+
+print("Status 401:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Update User - Invalid Email
+PUT {{baseurl}}/users
+Authorization: Bearer {{mgmt_token}}
+Content-Type: application/json
+
+{
+  "email": "invalid-email",
+  "password": "password123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 400
+local body = vim.json.decode(response.body)
+local error_check = body.error == "Invalid email address"
+
+print("Status 400:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}

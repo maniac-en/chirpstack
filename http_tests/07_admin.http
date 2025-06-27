@@ -1,0 +1,102 @@
+@myhost = http://localhost:8080
+@baseurl = {{myhost}}/admin
+
+### Admin Metrics - Check Hit Counter
+GET {{baseurl}}/metrics
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local content_type_check = response.headers["content-type"][1] == "text/html; charset=utf-8"
+local body_check = string.find(response.body, "Welcome, Chirpy Admin") ~= nil
+local counter_check = string.find(response.body, "Chirpy has been visited") ~= nil
+
+print("Status 200:", status_check)
+print("Content-Type HTML:", content_type_check)
+print("Has welcome message:", body_check)
+print("Has counter:", counter_check)
+print("Overall:", status_check and content_type_check and body_check and counter_check)
+%}
+
+### Make some app requests to increment counter
+GET {{myhost}}/app/
+
+# @lang=lua
+> {%
+print("App request made:", response.status.code == 200)
+%}
+
+### Make another app request
+GET {{myhost}}/app/assets/logo.png
+
+# @lang=lua
+> {%
+print("Asset request made:", response.status.code == 200)
+%}
+
+### Check metrics again - should have higher count
+GET {{baseurl}}/metrics
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local counter_check = string.find(response.body, "Chirpy has been visited") ~= nil
+
+-- Extract the number from the response
+local count = string.match(response.body, "visited (%d+) times")
+local count_num = tonumber(count)
+
+print("Status 200:", status_check)
+print("Has counter:", counter_check)
+print("Count:", count_num)
+print("Count > 0:", count_num and count_num > 0)
+print("Overall:", status_check and counter_check and count_num and count_num > 0)
+%}
+
+### Admin Reset - In Dev Mode (Should Work)
+POST {{baseurl}}/reset
+
+# @lang=lua
+> {%
+-- This test depends on PLATFORM environment variable
+-- In dev mode, it should return 200 with "OK"
+-- In prod mode, it should return 403 with "Operation not allowed"
+local status_check_dev = response.status.code == 200
+local status_check_prod = response.status.code == 403
+
+local content_type_check = response.headers["content-type"][1] == "text/plain; charset=utf-8"
+local body_ok = response.body == "OK"
+local body_forbidden = string.find(response.body, "Operation not allowed") ~= nil
+
+print("Status (dev=200, prod=403):", response.status.code)
+print("Content-Type plain:", content_type_check)
+
+if status_check_dev then
+    print("Dev mode - Body OK:", body_ok)
+    print("Dev Overall:", status_check_dev and content_type_check and body_ok)
+elseif status_check_prod then
+    print("Prod mode - Body forbidden:", body_forbidden)
+    print("Prod Overall:", status_check_prod and body_forbidden)
+else
+    print("Unexpected status code")
+end
+%}
+
+### Check metrics after reset (if in dev mode)
+GET {{baseurl}}/metrics
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local counter_check = string.find(response.body, "Chirpy has been visited") ~= nil
+
+-- Extract the number from the response
+local count = string.match(response.body, "visited (%d+) times")
+local count_num = tonumber(count)
+
+print("Status 200:", status_check)
+print("Has counter:", counter_check)
+print("Count after reset:", count_num)
+print("Count should be 0 in dev mode:", count_num == 0)
+print("Overall:", status_check and counter_check)
+%}

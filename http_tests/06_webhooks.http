@@ -1,0 +1,66 @@
+@myhost = http://localhost:8080
+@baseurl = {{myhost}}/api
+
+### Setup - Create User for Webhook Tests
+POST {{baseurl}}/users
+Content-Type: application/json
+
+{
+  "email": "webhook.user@example.com",
+  "password": "testpassword123"
+}
+
+# @lang=lua
+> {%
+local body = vim.json.decode(response.body)
+if body.id then
+    client.global.set("webhook_user_id", body.id)
+end
+print("User created:", response.status.code == 201)
+%}
+
+### Webhook - Missing API Key
+POST {{baseurl}}/polka/webhooks
+Content-Type: application/json
+
+{
+  "event": "user.upgraded",
+  "data": {
+    "user_id": "{{webhook_user_id}}"
+  }
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 401
+local body = vim.json.decode(response.body)
+local error_check = body.error == "missing/invalid API key"
+
+print("Status 401:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Webhook - Invalid API Key
+POST {{baseurl}}/polka/webhooks
+Authorization: ApiKey invalid-api-key
+Content-Type: application/json
+
+{
+  "event": "user.upgraded",
+  "data": {
+    "user_id": "{{webhook_user_id}}"
+  }
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 401
+local body = vim.json.decode(response.body)
+local error_check = body.error == "missing/invalid API key"
+
+print("Status 401:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+

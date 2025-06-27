@@ -1,0 +1,143 @@
+@myhost = http://localhost:8080
+@baseurl = {{myhost}}/api
+
+### Setup - Create User for Authentication Tests
+POST {{baseurl}}/users
+Content-Type: application/json
+
+{
+  "email": "auth.test@example.com",
+  "password": "testpassword123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 201
+print("User created:", status_check)
+%}
+
+### User Login - Valid Credentials
+POST {{baseurl}}/login
+Content-Type: application/json
+
+{
+  "email": "auth.test@example.com",
+  "password": "testpassword123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local content_type_check = response.headers["content-type"][1] == "application/json"
+local body = vim.json.decode(response.body)
+
+local has_token = body.token ~= nil and body.token ~= ""
+local has_refresh_token = body.refresh_token ~= nil and body.refresh_token ~= ""
+local has_user_data = body.id ~= nil and body.email == "auth.test@example.com"
+local no_password = body.hashed_password == nil
+
+print("Status 200:", status_check)
+print("Content-Type JSON:", content_type_check)
+print("Has JWT token:", has_token)
+print("Has refresh token:", has_refresh_token)
+print("Has user data:", has_user_data)
+print("Password hidden:", no_password)
+print("Overall:", status_check and content_type_check and has_token and has_refresh_token and has_user_data and no_password)
+
+-- Store tokens for later tests
+if body.token then
+    client.global.set("auth_token", body.token)
+end
+if body.refresh_token then
+    client.global.set("refresh_token", body.refresh_token)
+end
+if body.id then
+    client.global.set("auth_user_id", body.id)
+end
+%}
+
+### User Login - Invalid Email
+POST {{baseurl}}/login
+Content-Type: application/json
+
+{
+  "email": "invalid-email",
+  "password": "testpassword123"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 400
+local body = vim.json.decode(response.body)
+local error_check = body.error == "Invalid email address"
+
+print("Status 400:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### User Login - Wrong Password
+POST {{baseurl}}/login
+Content-Type: application/json
+
+{
+  "email": "auth.test@example.com",
+  "password": "wrongpassword"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 401
+local body = vim.json.decode(response.body)
+local error_check = body.error == "incorrect email or password"
+
+print("Status 401:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Token Refresh - Valid Refresh Token
+POST {{baseurl}}/refresh
+Authorization: Bearer {{refresh_token}}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local body = vim.json.decode(response.body)
+local has_token = body.token ~= nil and body.token ~= ""
+
+print("Status 200:", status_check)
+print("Has new token:", has_token)
+print("Overall:", status_check and has_token)
+
+-- Update the auth token
+if body.token then
+    client.global.set("auth_token", body.token)
+end
+%}
+
+### Token Refresh - Invalid Refresh Token
+POST {{baseurl}}/refresh
+Authorization: Bearer invalid-refresh-token
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 401
+local body = vim.json.decode(response.body)
+local error_check = body.error == "invalid refresh token"
+
+print("Status 401:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Token Revoke - Valid Refresh Token
+POST {{baseurl}}/revoke
+Authorization: Bearer {{refresh_token}}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 204
+print("Status 204:", status_check)
+print("Overall:", status_check)
+%}

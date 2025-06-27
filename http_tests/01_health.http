@@ -1,0 +1,16 @@
+@myhost = http://localhost:8080
+@baseurl = {{myhost}}/api
+
+### Health Check
+GET {{baseurl}}/health
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local content_type_check = response.headers["content-type"][1] == "text/plain; charset=utf-8"
+local body_check = response.body == "OK"
+print("Status:", status_check)
+print("Content-Type:", content_type_check) 
+print("Body:", body_check)
+print("Overall:", status_check and content_type_check and body_check)
+%}

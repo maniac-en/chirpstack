@@ -1,0 +1,262 @@
+@myhost = http://localhost:8080
+@baseurl = {{myhost}}/api
+
+### Setup - Create User for Chirp Tests
+POST {{baseurl}}/users
+Content-Type: application/json
+
+{
+  "email": "chirp.user@example.com",
+  "password": "testpassword123"
+}
+
+# @lang=lua
+> {%
+print("User created:", response.status.code == 201)
+%}
+
+### Login to get auth token
+POST {{baseurl}}/login
+Content-Type: application/json
+
+{
+  "email": "chirp.user@example.com",
+  "password": "testpassword123"
+}
+
+# @lang=lua
+> {%
+local body = vim.json.decode(response.body)
+if body.token then
+    client.global.set("chirp_token", body.token)
+    client.global.set("chirp_user_id", body.id)
+end
+print("Login successful:", response.status.code == 200)
+%}
+
+### Create Chirp - Valid Chirp
+POST {{baseurl}}/chirps
+Authorization: Bearer {{chirp_token}}
+Content-Type: application/json
+
+{
+  "body": "This is my first chirp! Excited to be here."
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 201
+local content_type_check = response.headers["content-type"][1] == "application/json"
+local body = vim.json.decode(response.body)
+
+local has_id = body.id ~= nil
+local has_body = body.body == "This is my first chirp! Excited to be here."
+local has_created_at = body.created_at ~= nil
+local has_updated_at = body.updated_at ~= nil
+local has_user_id = body.user_id ~= nil
+
+print("Status 201:", status_check)
+print("Content-Type JSON:", content_type_check)
+print("Has ID:", has_id)
+print("Body correct:", has_body)
+print("Has created_at:", has_created_at)
+print("Has updated_at:", has_updated_at)
+print("Has user_id:", has_user_id)
+print("Overall:", status_check and content_type_check and has_id and has_body and has_created_at and has_updated_at and has_user_id)
+
+-- Store chirp ID for later tests
+if body.id then
+    client.global.set("chirp1_id", body.id)
+end
+%}
+
+### Create Chirp - With Profanity
+POST {{baseurl}}/chirps
+Authorization: Bearer {{chirp_token}}
+Content-Type: application/json
+
+{
+  "body": "This kerfuffle is really bothering me!"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 201
+local body = vim.json.decode(response.body)
+local profanity_cleaned = body.body == "This **** is really bothering me!"
+
+print("Status 201:", status_check)
+print("Profanity cleaned:", profanity_cleaned)
+print("Overall:", status_check and profanity_cleaned)
+
+if body.id then
+    client.global.set("chirp2_id", body.id)
+end
+%}
+
+### Create Chirp - Too Long
+POST {{baseurl}}/chirps
+Authorization: Bearer {{chirp_token}}
+Content-Type: application/json
+
+{
+  "body": "This chirp is way too long and exceeds the 140 character limit that we have set for chirps in our application. It should be rejected by the server with a 400 status code and an appropriate error message."
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 400
+local body = vim.json.decode(response.body)
+local error_check = body.error == "Chirp is too long"
+
+print("Status 400:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Create Chirp - No Authorization
+POST {{baseurl}}/chirps
+Content-Type: application/json
+
+{
+  "body": "This should fail without auth"
+}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 401
+local body = vim.json.decode(response.body)
+local error_check = body.error == "authorization header not found in request"
+
+print("Status 401:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Get All Chirps
+GET {{baseurl}}/chirps
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local content_type_check = response.headers["content-type"][1] == "application/json"
+local body = vim.json.decode(response.body)
+local is_array = type(body) == "table" and #body >= 0
+
+print("Status 200:", status_check)
+print("Content-Type JSON:", content_type_check)
+print("Is array:", is_array)
+print("Has chirps:", #body >= 2)
+print("Overall:", status_check and content_type_check and is_array)
+%}
+
+### Get All Chirps - Sorted Descending
+GET {{baseurl}}/chirps?sort=desc
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local body = vim.json.decode(response.body)
+local is_array = type(body) == "table"
+
+print("Status 200:", status_check)
+print("Is array:", is_array)
+print("Has chirps:", #body >= 1)
+print("Overall:", status_check and is_array)
+%}
+
+### Get Chirps by Author ID
+GET {{baseurl}}/chirps?author_id={{chirp_user_id}}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local body = vim.json.decode(response.body)
+local is_array = type(body) == "table"
+
+-- Check that all chirps belong to the specified author
+local all_author_match = true
+for i, chirp in ipairs(body) do
+    if chirp.user_id ~= client.global.get("chirp_user_id") then
+        all_author_match = false
+        break
+    end
+end
+
+print("Status 200:", status_check)
+print("Is array:", is_array)
+print("All chirps from author:", all_author_match)
+print("Overall:", status_check and is_array and all_author_match)
+%}
+
+### Get Specific Chirp by ID
+GET {{baseurl}}/chirps/{{chirp1_id}}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 200
+local body = vim.json.decode(response.body)
+local correct_id = body.id == client.global.get("chirp1_id")
+local has_body = body.body ~= nil
+local has_user_id = body.user_id ~= nil
+
+print("Status 200:", status_check)
+print("Correct ID:", correct_id)
+print("Has body:", has_body)
+print("Has user_id:", has_user_id)
+print("Overall:", status_check and correct_id and has_body and has_user_id)
+%}
+
+### Get Non-existent Chirp
+GET {{baseurl}}/chirps/00000000-0000-0000-0000-000000000000
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 404
+local body = vim.json.decode(response.body)
+local error_check = body.error == "No chirp found"
+
+print("Status 404:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Delete Chirp - Valid Request
+DELETE {{baseurl}}/chirps/{{chirp2_id}}
+Authorization: Bearer {{chirp_token}}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 204
+print("Status 204:", status_check)
+print("Overall:", status_check)
+%}
+
+### Delete Chirp - Unauthorized (No Token)
+DELETE {{baseurl}}/chirps/{{chirp1_id}}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 403
+local body = vim.json.decode(response.body)
+local error_check = body.error == "operation not allowed"
+
+print("Status 403:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
+
+### Delete Non-existent Chirp
+DELETE {{baseurl}}/chirps/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{chirp_token}}
+
+# @lang=lua
+> {%
+local status_check = response.status.code == 404
+local body = vim.json.decode(response.body)
+local error_check = body.error == "No chirp found"
+
+print("Status 404:", status_check)
+print("Error message:", error_check)
+print("Overall:", status_check and error_check)
+%}
