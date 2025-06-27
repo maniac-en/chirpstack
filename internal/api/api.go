@@ -139,6 +139,95 @@ func (cfg *APIConfig) ValidateChirpHandler(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
+	jwtToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userID, err := auth.ValidateJWT(jwtToken, cfg.JWTTokenSecret)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	type requestBody struct {
+		Body string `json:"body"`
+	}
+	defer r.Body.Close()
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	params := requestBody{}
+	if err := json.Unmarshal(data, &params); err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+
+	if len(params.Body) > 140 {
+		utils.RespondWithError(w, http.StatusBadRequest, "Chirp is too long")
+		return
+	}
+
+	if cleanedChirp, cleaned := utils.RemoveProfanity(params.Body); cleaned {
+		params.Body = cleanedChirp
+	}
+
+	chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body: params.Body,
+		UserID: uuid.NullUUID{
+			UUID:  userID,
+			Valid: true,
+		},
+	})
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	utils.RespondWithJSON(w, http.StatusCreated, chirp)
+}
+
+func (cfg *APIConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	chirps, err := cfg.DB.GetChirps(r.Context())
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	if len(chirps) > 0 {
+		utils.RespondWithJSON(w, http.StatusOK, chirps)
+	} else {
+		utils.RespondWithJSON(w, http.StatusOK, []database.Chirp{})
+	}
+}
+
+func (cfg *APIConfig) GetChirpByID(w http.ResponseWriter, r *http.Request) {
+	chirpID := r.PathValue("id")
+	if chirpID == "" {
+		utils.RespondWithError(w, http.StatusBadRequest, "No chirp ID passed")
+		return
+	}
+	chirpUUID, err := uuid.Parse(chirpID)
+	if err != nil {
+		utils.RespondWithError(w, http.StatusInternalServerError, "Invalid chirp ID passed")
+		return
+	}
+
+	chirp, err := cfg.DB.GetChirpByID(r.Context(), chirpUUID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.RespondWithError(w, http.StatusNotFound, "No chirp found")
+			return
+		}
+		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
+		return
+	}
+	utils.RespondWithJSON(w, http.StatusOK, chirp)
+}
+
 func (cfg *APIConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 	type requestBody struct {
 		Password string `json:"password"`
@@ -302,7 +391,7 @@ func (cfg *APIConfig) RevokeUserToken(w http.ResponseWriter, r *http.Request) {
 	utils.RespondWithJSON(w, http.StatusNoContent, nil)
 }
 
-func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
+func (cfg *APIConfig) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	jwtToken, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		utils.RespondWithError(w, http.StatusUnauthorized, err.Error())
@@ -316,7 +405,8 @@ func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type requestBody struct {
-		Body string `json:"body"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	defer r.Body.Close()
 	data, err := io.ReadAll(r.Body)
@@ -330,63 +420,33 @@ func (cfg *APIConfig) CreateChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(params.Body) > 140 {
-		utils.RespondWithError(w, http.StatusBadRequest, "Chirp is too long")
-		return
-	}
-
-	if cleanedChirp, cleaned := utils.RemoveProfanity(params.Body); cleaned {
-		params.Body = cleanedChirp
-	}
-
-	chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams{
-		Body: params.Body,
-		UserID: uuid.NullUUID{
-			UUID:  userID,
-			Valid: true,
-		},
-	})
+	_, err = mail.ParseAddress(params.Email)
 	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
-		return
-	}
-	utils.RespondWithJSON(w, http.StatusCreated, chirp)
-}
-
-func (cfg *APIConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-	chirps, err := cfg.DB.GetChirps(r.Context())
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
-		return
-	}
-	if len(chirps) > 0 {
-		utils.RespondWithJSON(w, http.StatusOK, chirps)
-	} else {
-		utils.RespondWithJSON(w, http.StatusOK, []database.Chirp{})
-	}
-}
-
-func (cfg *APIConfig) GetChirpByID(w http.ResponseWriter, r *http.Request) {
-	chirpID := r.PathValue("id")
-	if chirpID == "" {
-		utils.RespondWithError(w, http.StatusBadRequest, "No chirp ID passed")
-		return
-	}
-	chirpUUID, err := uuid.Parse(chirpID)
-	if err != nil {
-		utils.RespondWithError(w, http.StatusInternalServerError, "Invalid chirp ID passed")
+		utils.RespondWithError(w, http.StatusBadRequest, "Invalid email address")
 		return
 	}
 
-	chirp, err := cfg.DB.GetChirpByID(r.Context(), chirpUUID)
+	hashedPassword, err := auth.HashPassword(params.Password)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			utils.RespondWithError(w, http.StatusNotFound, "No chirp found")
+		if err.Error() == auth.ErrPasswordTooLong {
+			utils.RespondWithError(w, http.StatusBadRequest, err.Error())
+			return
+		} else {
+			utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
 			return
 		}
+	}
+
+	updateUserParams := database.UpdateUserParams{
+		Email:          params.Email,
+		HashedPassword: hashedPassword,
+		ID:             userID,
+	}
+
+	updatedUserInfo, err := cfg.DB.UpdateUser(r.Context(), updateUserParams)
+	if err != nil {
 		utils.RespondWithError(w, http.StatusInternalServerError, "Something went wrong")
 		return
 	}
-	utils.RespondWithJSON(w, http.StatusOK, chirp)
+	utils.RespondWithJSON(w, http.StatusOK, updatedUserInfo)
 }
