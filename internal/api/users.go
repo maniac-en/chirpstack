@@ -122,6 +122,13 @@ func (cfg *APIConfig) UpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *APIConfig) UpgradeUser(w http.ResponseWriter, r *http.Request) {
+	// validate the API key for
+	polkaAPIKey, err := auth.GetAPIKey(r.Header)
+	if err != nil || polkaAPIKey != cfg.PolkaAPIKey {
+		utils.RespondWithError(w, http.StatusUnauthorized, "missing/invalid API key")
+		return
+	}
+
 	type requestBody struct {
 		Event string `json:"event"`
 		Data  struct {

@@ -33,10 +33,13 @@ func main() {
 		log.Fatal("empty secret found for JWT signing")
 	}
 
+	polkaAPIKey := os.Getenv("POLKA_KEY")
+
 	apiCfg := api.APIConfig{
 		DB:             database.New(db),
 		Platform:       platform,
 		JWTTokenSecret: jwtTokenSecret,
+		PolkaAPIKey:    polkaAPIKey,
 	}
 	mux := http.NewServeMux()
 	fileserverHandler := http.StripPrefix("/app", http.FileServer(http.Dir('.')))
