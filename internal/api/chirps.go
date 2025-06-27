@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/maniac-en/chirpstack/internal/auth"
@@ -128,6 +129,11 @@ func (cfg *APIConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(chirps) > 0 {
+		// check for sort param
+		sortOrder := r.URL.Query().Get("sort")
+		if sortOrder == "desc" {
+			sort.Slice(chirps, func(i, j int) bool { return chirps[i].CreatedAt.After(chirps[j].CreatedAt) })
+		}
 		utils.RespondWithJSON(w, http.StatusOK, chirps)
 	} else {
 		utils.RespondWithJSON(w, http.StatusOK, []database.Chirp{})
